@@ -48,18 +48,12 @@ portfolio-manager/
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/portfolio-manager.git
-   cd portfolio-manager
-   ```
-
-2. **Install dependencies**
+1. **Install dependencies**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Configure settings** (optional)
+2. **Configure settings** (optional)
    
    Edit `config.py` to customize:
    - Date range for backtesting
