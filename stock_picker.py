@@ -168,8 +168,29 @@ def create_monthly_returns(df_daily, ff_factors):
     monthly_rf = monthly_ff['RF']
     monthly_factors = monthly_ff[['Mkt-RF', 'SMB', 'HML', 'RMW', 'CMA']]
 
-    # Strict index alignment
-    common_dates = monthly_returns.index.intersection(monthly_ff.index)
+    # =========================================================================
+    # FORWARD-FILL: extend FF factors for months where prices exist but
+    # Fama-French data is not yet published. Uses last available factors.
+    # =========================================================================
+    prices_dates = monthly_returns.index
+    ff_dates = monthly_ff.index
+    
+    # Find months in prices that are beyond the last available FF date
+    missing_months = prices_dates[prices_dates > ff_dates.max()]
+    
+    if len(missing_months) > 0:
+        last_ff_date = ff_dates.max()
+        print(f"  ⚠️  Fama-French factors end at {last_ff_date.strftime('%Y-%m')}")
+        print(f"  ⚠️  Prices extend {len(missing_months)} month(s) beyond: "
+              f"{', '.join(d.strftime('%Y-%m') for d in missing_months)}")
+        print(f"  ➡️  Forward-filling last available factors for missing months")
+        
+        # Reindex RF and factors to cover all price dates, forward-fill
+        monthly_rf = monthly_rf.reindex(prices_dates).ffill()
+        monthly_factors = monthly_factors.reindex(prices_dates).ffill()
+    
+    # Align: use all dates where BOTH returns and (possibly extended) factors exist
+    common_dates = monthly_returns.index.intersection(monthly_rf.index)
 
     monthly_returns = monthly_returns.loc[common_dates]
     monthly_rf = monthly_rf.loc[common_dates]
@@ -185,6 +206,9 @@ def create_monthly_returns(df_daily, ff_factors):
     excess_returns = monthly_returns.sub(monthly_rf, axis=0)
 
     print(f"✓ Excess Returns calculated")
+    print(f"  Total months aligned: {len(excess_returns)}")
+    if len(missing_months) > 0:
+        print(f"  (of which {len(missing_months)} use forward-filled FF factors)")
 
     return excess_returns, monthly_rf, monthly_factors
 
@@ -409,6 +433,96 @@ def round_weights_integers(weights_series, target_total):
         rounded[rounded.idxmax()] += diff
 
     return rounded
+
+
+# =============================================================================
+# SILENT WEIGHT CALCULATION (for Monte Carlo simulations)
+# =============================================================================
+
+def calculate_weights_silent(dict_alpha_plus, prices_daily, momentum, sector_mapping,
+                             sector_limits, min_weight=0.05):
+    """
+    Same logic as calculate_weights but without print statements.
+    Used by Monte Carlo robustness simulations to avoid console spam.
+    
+    Args:
+        dict_alpha_plus: Dictionary of alpha-filtered tickers per date
+        prices_daily: DataFrame of daily prices
+        momentum: DataFrame of momentum scores
+        sector_mapping: Dictionary mapping ticker -> sector
+        sector_limits: Dictionary of sector allocation limits
+        min_weight: Minimum weight per stock
+    
+    Returns:
+        portfolio_weights: Dictionary with dates as keys, weight Series as values
+    """
+    portfolio_weights = {}
+    monthly_prices = prices_daily.resample('ME').last()
+    monthly_returns = monthly_prices.pct_change()
+    volatility = monthly_returns.rolling(window=12).std()
+
+    for date, active_tickers in dict_alpha_plus.items():
+
+        if not active_tickers:
+            continue
+
+        # Apply sector filters
+        filtered_tickers, sector_breakdown = apply_sector_filters(
+            active_tickers, sector_mapping, sector_limits, min_weight
+        )
+
+        if not filtered_tickers:
+            continue
+
+        # Verify tickers are in the dataset
+        available_tickers = [t for t in filtered_tickers if t in momentum.columns]
+
+        if not available_tickers:
+            continue
+
+        # Calculate weights based on momentum and volatility
+        try:
+            mom_values = momentum.loc[date, available_tickers]
+            vol_values = volatility.loc[date, available_tickers]
+        except KeyError:
+            continue
+
+        # Remove NaNs
+        valid_mask = mom_values.notna() & vol_values.notna() & (vol_values > 0)
+        mom_values = mom_values[valid_mask]
+        vol_values = vol_values[valid_mask]
+
+        if len(mom_values) == 0:
+            continue
+
+        # Score: momentum / volatility
+        score = mom_values / vol_values
+        score = score.clip(lower=0)
+
+        if score.sum() <= 0:
+            continue
+
+        # Normalize to 1
+        w_normalized = score / score.sum()
+
+        if len(w_normalized) > 0:
+            max_positions = int(1.0 / min_weight)
+
+            if len(w_normalized) > max_positions:
+                w_normalized = w_normalized.nlargest(max_positions)
+                w_normalized = w_normalized / w_normalized.sum()
+
+            w_filtered = w_normalized[w_normalized >= min_weight * 0.8]
+
+            if len(w_filtered) == 0:
+                w_filtered = w_normalized.nlargest(min(10, len(w_normalized)))
+
+            w_final = w_filtered / w_filtered.sum()
+
+            w_integers = round_weights_integers(w_final, 100)
+            portfolio_weights[date] = w_integers / 100
+
+    return portfolio_weights
 
 # =============================================================================
 # STEP 6: BACKTEST
@@ -661,7 +775,7 @@ def get_sp500_tickers():
 # =============================================================================
 
 def run_stock_strategy(start_date, end_date, sector_limits, min_weight=0.05, alpha_window=36, 
-                      momentum_lookback=12, round_to_integer=True):
+                      momentum_lookback=12, round_to_integer=True, return_intermediate_data=False):
     """
     Complete stock selection strategy with ORIGINAL WINNING LOGIC
     
@@ -673,9 +787,12 @@ def run_stock_strategy(start_date, end_date, sector_limits, min_weight=0.05, alp
         alpha_window: Rolling window for alpha calculation
         momentum_lookback: Momentum lookback period
         round_to_integer: Round weights to integer percentages (not used, always True)
+        return_intermediate_data: If True, also return dict_alpha_plus, prices_daily,
+                                  momentum, sector_mapping for robustness MC
     
     Returns: 
         portfolio_weights, monthly_returns
+        (if return_intermediate_data=True, also returns intermediate_data dict)
     """
     print("\n" + "=" * 70)
     print(f"🚀 RUNNING STOCK STRATEGY")
@@ -686,6 +803,8 @@ def run_stock_strategy(start_date, end_date, sector_limits, min_weight=0.05, alp
 
     if not tickers:
         print("❌ Failed to get tickers")
+        if return_intermediate_data:
+            return {}, pd.DataFrame(), None
         return {}, pd.DataFrame()
 
     # Download data
@@ -694,6 +813,8 @@ def run_stock_strategy(start_date, end_date, sector_limits, min_weight=0.05, alp
 
     if ff_factors is None:
         print("❌ Failed to download Fama-French factors")
+        if return_intermediate_data:
+            return {}, pd.DataFrame(), None
         return {}, pd.DataFrame()
 
     # Calculate returns
@@ -722,6 +843,15 @@ def run_stock_strategy(start_date, end_date, sector_limits, min_weight=0.05, alp
 
     print(f"\n✓ Stock strategy complete!")
     print(f"  - Portfolio rebalancing dates: {len(portfolio_weights)}")
+
+    if return_intermediate_data:
+        intermediate_data = {
+            'dict_alpha_plus': dict_alpha_plus,
+            'prices_daily': prices_daily,
+            'momentum': momentum,
+            'sector_mapping': sector_mapping,
+        }
+        return portfolio_weights, monthly_returns, intermediate_data
 
     return portfolio_weights, monthly_returns
 
