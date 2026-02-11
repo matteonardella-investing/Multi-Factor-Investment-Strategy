@@ -2,7 +2,6 @@ import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
 import warnings
-import requests
 from datetime import datetime
 warnings.filterwarnings('ignore')
 
@@ -566,35 +565,6 @@ def run_backtest(portfolio_weights, monthly_returns):
     return equity_curve, strategy_returns
 
 # =============================================================================
-# STEP 6: TELEGRAM
-# =============================================================================
-
-def send_telegram_alert(token, chat_id, date, weights):
-    message = f"🚀 *INVESTING STRATEGY: NEW REBALANCE*\n"
-    message += f"📅 Date: {date.date()}\n\n"
-    message += f"📊 *Target Portfolio Holdings:*\n"
-
-    weights_sorted = weights.sort_values(ascending=False)
-    for asset, weight in weights_sorted.items():
-        if weight > 0:
-            message += f"• {asset}: {weight * 100:.2f}%\n"
-
-    message += f"\n🔄 _Please update your brokerage account positions._"
-
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
-
-    try:
-        requests.post(url, json=payload)
-        print("✅ Alert sent to Telegram!")
-    except Exception as e:
-        print(f"❌ Failed to send Telegram alert: {e}")
-
-# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -996,14 +966,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Export failed: {e}")
 
-    # 10: ALERT ON TELEGRAM
-    available_dates = sorted(PORTFOLIO_WEIGHTS.keys())
-    last_available_date = available_dates[-1]
-    last_weights = PORTFOLIO_WEIGHTS[last_available_date]
-
-    current_display_date = datetime.now()
-
-    MY_TOKEN = "8514820447:AAH927K_PHktau1fYlnTbnNpGO6OBCA4gDE"
-    MY_CHAT_ID = "217484630"
-
-    send_telegram_alert(MY_TOKEN, MY_CHAT_ID, current_display_date, last_weights)
