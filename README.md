@@ -204,7 +204,15 @@ The engine runs **200 full strategy re-simulations**, each time injecting 20 % G
 
 After each run, the system sends a **Telegram message** with the current month's target holdings and weights. This is designed for practical use: run the script on the first trading day of each month, receive the new portfolio on your phone, and rebalance your brokerage account accordingly.
 
-Configure your Telegram bot token and chat ID in `config.py`.
+1. Create a bot with [@BotFather](https://t.me/botfather)
+2. Get your bot token
+3. Find your chat ID (use [@userinfobot](https://t.me/userinfobot))
+4. Update `config.py`:
+   ```python
+   TELEGRAM_ENABLED = True
+   TELEGRAM_TOKEN = "your_bot_token"
+   TELEGRAM_CHAT_ID = "your_chat_id"
+   ```
 
 ---
 
