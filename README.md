@@ -157,7 +157,7 @@ The engine takes the 96 observed monthly portfolio returns and performs **10,000
 For each simulated path, the system computes terminal value, annualized return, and maximum drawdown.
 
 <!-- Placeholder for Bootstrap Monte Carlo plot -->
-![Bootstrap Monte Carlo Simulation](monte_carlo_simulation.png)
+![Bootstrap Monte Carlo Simulation](images/monte_carlo_simulation.png)
 
 **Key results (10,000 simulations, 10-year horizon):**
 
@@ -180,7 +180,7 @@ This answers a different question: **"How sensitive are the results to the exact
 The engine runs **200 full strategy re-simulations**, each time injecting 20 % Gaussian noise into the momentum scores and shuffling alpha rankings proportionally. This means each simulation picks a slightly different portfolio, tests a slightly different weighting, and produces a slightly different equity curve — all while keeping the same fundamental methodology.
 
 <!-- Placeholder for Robustness Monte Carlo plot -->
-![Robustness Monte Carlo](robustness_monte_carlo.png)
+![Robustness Monte Carlo](images/robustness_monte_carlo.png)
 
 **Key results (200 simulations, 20 % noise):**
 
@@ -221,7 +221,7 @@ After each run, the system sends a **Telegram message** with the current month's
 **Period:** January 2015 – February 2026 (~11 years)
 
 <!-- Placeholder for performance plot -->
-![Portfolio Performance](portfolio_performance.png)
+![Portfolio Performance](images/portfolio_performance.png)
 
 ### Performance Summary
 
