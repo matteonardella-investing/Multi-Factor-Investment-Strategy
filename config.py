@@ -129,8 +129,8 @@ ROBUSTNESS_EXCEL_FILE = 'robustness_monte_carlo_results.xlsx'
 # =============================================================================
 
 TELEGRAM_ENABLED = True
-TELEGRAM_TOKEN = "8514820447:AAH927K_PHktau1fYlnTbnNpGO6OBCA4gDE"
-TELEGRAM_CHAT_ID = "217484630"
+TELEGRAM_TOKEN = "your_telegram_toker"
+TELEGRAM_CHAT_ID = "your_chat_ID"
 
 # =============================================================================
 # OUTPUT SETTINGS
